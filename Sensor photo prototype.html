@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sensor photo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.min.js"></script>
+<style>
+:root{--bg:#eef1ec;--fg:#16221b;--mut:#58675f;--card:#fff;--line:#d3dad4;--acc:#0c7556;--warn:#a8480f;--vf:#0b100d;color-scheme:light;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1511;--fg:#e4eee7;--mut:#93a49a;--card:#17211b;--line:#2a392f;--acc:#4fd6a4;--warn:#f2a366;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1511;--fg:#e4eee7;--mut:#93a49a;--card:#17211b;--line:#2a392f;--acc:#4fd6a4;--warn:#f2a366;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px 14px 40px;display:grid;gap:14px}
+h1{font-size:1.35rem;margin:4px 0 0;font-weight:650;letter-spacing:-.01em}
+p{margin:0}.mut{color:var(--mut);font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 16px;background:var(--acc);color:var(--bg);cursor:pointer}
+button.alt{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.5}
+button:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.vf{position:relative;aspect-ratio:3/4;background:var(--vf);border-radius:14px;overflow:hidden;display:none}
+.vf.on{display:block}
+.vf video{width:100%;height:100%;object-fit:cover;display:block}
+.hz{position:absolute;left:-50%;width:200%;top:50%;height:2px;background:#fff;opacity:.85;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.hz.lvl{background:#5cf0b4}
+.ch{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;border:2px solid rgba(255,255,255,.8);border-radius:50%}
+.hud{position:absolute;left:10px;top:10px;color:#fff;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:8px;font-variant-numeric:tabular-nums;font-weight:600}
+.nocam{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;color:#cfd8d2;padding:24px}
+.shutter{display:block;width:100%;font-size:1.05rem;padding:15px}
+.mode{font-weight:650}
+.mode.warn{color:var(--warn)}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.chip{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:.88rem}
+.chip b{display:block;font-weight:600}
+.chip span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--mut)}
+.chip.live span::before{background:var(--acc)}
+.chip.none span::before{background:var(--warn)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;font-variant-numeric:tabular-nums}
+.grid div{font-size:.8rem;color:var(--mut)}
+.grid strong{display:block;font-size:1.15rem;color:var(--fg);font-weight:600}
+.res img{width:100%;border-radius:10px;display:block;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+pre{overflow-x:auto;font-size:.76rem;background:var(--bg);padding:10px;border-radius:8px;margin:8px 0 0}
+details summary{cursor:pointer;color:var(--mut);font-size:.9rem}
+#msg{font-size:.9rem;color:var(--warn)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Sensor photo</h1>
+  <p class="mut">Takes a photo and embeds the phone’s heading, tilt, gravity and magnetic readings in the JPEG’s EXIF data.</p>
+
+  <section class="card" id="startCard">
+    <button id="start">Start camera and sensors</button>
+    <p class="mut" style="margin-top:8px">Your browser will ask for camera and motion access. Nothing leaves your phone.</p>
+    <p id="msg" role="status"></p>
+  </section>
+
+  <section class="vf" id="vf" aria-label="Camera preview">
+    <video id="vid" playsinline muted></video>
+    <div class="nocam" id="nocam">Camera unavailable. Sensor readings still work below.</div>
+    <div class="hz" id="hz"></div><div class="ch"></div>
+    <div class="hud" id="hud">–</div>
+  </section>
+
+  <button class="shutter" id="snap" disabled>Take photo</button>
+
+  <section class="card">
+    <p class="mode" id="mode">Waiting to start</p>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="card">
+    <div class="grid">
+      <div>Heading (camera)<strong id="rHead">–</strong></div>
+      <div>Camera pitch<strong id="rPitch">–</strong></div>
+      <div>Roll<strong id="rRoll">–</strong></div>
+      <div>Heading spread<strong id="rSpread">–</strong></div>
+      <div>Gravity x / y / z<strong id="rG">–</strong></div>
+      <div>Magnetic field |B|<strong id="rB">–</strong></div>
+    </div>
+  </section>
+
+  <section class="card res" id="res" hidden>
+    <img id="out" alt="Captured photo">
+    <p class="mut" id="size"></p>
+    <div class="row">
+      <button id="save">Save photo</button>
+      <button class="alt" id="share" hidden>Share</button>
+    </div>
+    <details><summary>Embedded data</summary><pre id="json"></pre></details>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s), RAD=Math.PI/180, DEG=180/Math.PI;
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent);
+const S={o:null,g:null,gLive:false,mag:null,absSeen:false,buf:[],t0:0,ic:null,blob:null,
+  caps:{gravity:false,heading:false,tilt:false,gyro:false,mag:false}};
+const NAMES={tilt:"Tilt",heading:"Heading (compass)",gravity:"Gravity",gyro:"Gyroscope",mag:"Raw magnetometer"};
+const fmt=(v,d=1)=>v==null||isNaN(v)?"–":v.toFixed(d);
+const pts=["N","NE","E","SE","S","SW","W","NW"];
+const pt=h=>pts[Math.round(h/45)%8];
+
+/* Direction the rear camera points, from W3C alpha/beta/gamma. */
+function camVec(a,b,g){
+  const cX=Math.cos(b*RAD),sX=Math.sin(b*RAD),cY=Math.cos(g*RAD),sY=Math.sin(g*RAD),cZ=Math.cos(a*RAD),sZ=Math.sin(a*RAD);
+  const x=-cZ*sY-sZ*sX*cY, y=-sZ*sY+cZ*sX*cY, z=-cX*cY;
+  return {h:(Math.atan2(x,y)*DEG+360)%360, flat:Math.hypot(x,y)<0.25, el:Math.asin(Math.max(-1,Math.min(1,z)))*DEG};
+}
+/* Up direction in device axes, derived from orientation when no gravity sensor exists. */
+const upFrom=(b,g)=>[-Math.cos(b*RAD)*Math.sin(g*RAD),Math.sin(b*RAD),Math.cos(b*RAD)*Math.cos(g*RAD)];
+
+function onOri(e){
+  if(e.type==="deviceorientation"&&S.absSeen)return;
+  if(e.type==="deviceorientationabsolute")S.absSeen=true;
+  let a=e.alpha,b=e.beta,g=e.gamma,abs=e.absolute===true||e.type==="deviceorientationabsolute";
+  if(typeof e.webkitCompassHeading==="number"){a=(360-e.webkitCompassHeading)%360;abs=true}
+  if(b==null||g==null)return;
+  S.caps.tilt=true;
+  const ha=a!=null&&abs;
+  if(ha)S.caps.heading=true;
+  S.o={a:a||0,b,g,ha};
+}
+function onMotion(e){
+  const m=e.accelerationIncludingGravity;
+  if(m&&m.x!=null&&!S.gLive){const k=IOS?-1:1;S.g=[m.x*k,m.y*k,m.z*k];S.caps.gravity=true}
+  if(e.rotationRate&&e.rotationRate.alpha!=null)S.caps.gyro=true;
+}
+function startGeneric(){
+  try{const gs=new GravitySensor({frequency:30});
+    gs.addEventListener("reading",()=>{S.gLive=true;S.g=[gs.x,gs.y,gs.z];S.caps.gravity=true});
+    gs.addEventListener("error",()=>{});gs.start()}catch(e){}
+  try{const m=new Magnetometer({frequency:20});
+    m.addEventListener("reading",()=>{S.mag=[m.x,m.y,m.z];S.caps.mag=true});
+    m.addEventListener("error",()=>{});m.start()}catch(e){}
+}
+
+function sample(){
+  const o=S.o; if(!o)return;
+  const v=camVec(o.a,o.b,o.g);
+  const up=S.g?S.g:upFrom(o.b,o.g).map(x=>x*9.81);
+  const roll=Math.atan2(up[0],up[1])*DEG;
+  S.buf.push({h:o.ha&&!v.flat?v.h:null,el:v.el,roll,up,mag:S.mag?S.mag.slice():null});
+  if(S.buf.length>20)S.buf.shift();
+}
+function summarize(){
+  const b=S.buf; if(!b.length)return null;
+  const mean=k=>b.reduce((s,x)=>s+x[k],0)/b.length;
+  const hs=b.map(x=>x.h).filter(h=>h!=null);
+  let hd=null,spread=null;
+  if(hs.length>=3){
+    const sx=hs.reduce((s,h)=>s+Math.sin(h*RAD),0)/hs.length, cx=hs.reduce((s,h)=>s+Math.cos(h*RAD),0)/hs.length;
+    hd=(Math.atan2(sx,cx)*DEG+360)%360; const R=Math.min(1,Math.hypot(sx,cx));
+    spread=Math.sqrt(-2*Math.log(Math.max(R,1e-6)))*DEG;
+  }
+  const ups=[0,1,2].map(i=>b.reduce((s,x)=>s+x.up[i],0)/b.length);
+  const mags=b.map(x=>x.mag).filter(Boolean);
+  const mg=mags.length?[0,1,2].map(i=>mags.reduce((s,x)=>s+x[i],0)/mags.length):null;
+  const mb=mg?Math.hypot(...mg):null;
+  const r=(x,d=1)=>x==null?null:+x.toFixed(d);
+  return {hd:r(hd),spread:r(spread),el:r(mean("el")),roll:r(mean("roll")),g:ups.map(x=>r(x,2)),mg:mg&&mg.map(x=>r(x)),mb:r(mb),n:b.length};
+}
+const state=k=>S.caps[k]?"live":(Date.now()-S.t0>2500?"none":"wait");
+
+function render(){
+  const s=summarize(), hz=$("#hz");
+  $("#chips").innerHTML=Object.keys(NAMES).map(k=>{const st=state(k);
+    return `<div class="chip ${st}"><b>${NAMES[k]}</b><span>${st==="live"?"Available":st==="none"?"Not found":"Checking"}</span></div>`}).join("");
+  const m=$("#mode"),c=S.caps;
+  if(!S.t0){m.textContent="Waiting to start";return}
+  m.className="mode"+(c.heading?"":" warn");
+  m.textContent=c.heading?"Full orientation: heading, tilt and gravity":c.tilt?"Tilt only: no compass on this device":(Date.now()-S.t0>2500?"No motion sensors found":"Checking sensors…");
+  if(!s)return;
+  $("#rHead").textContent=s.hd==null?"–":`${fmt(s.hd,0)}° ${pt(s.hd)}`;
+  $("#rPitch").textContent=fmt(s.el)+"°";
+  $("#rRoll").textContent=fmt(s.roll)+"°";
+  $("#rSpread").textContent=s.spread==null?"–":"±"+fmt(s.spread)+"°";
+  $("#rG").textContent=s.g.map(x=>fmt(x,1)).join(" / ");
+  $("#rB").textContent=s.mb==null?"–":fmt(s.mb,0)+" µT";
+  $("#hud").textContent=s.hd==null?`pitch ${fmt(s.el,0)}°`:`${fmt(s.hd,0)}° ${pt(s.hd)}  ·  pitch ${fmt(s.el,0)}°`;
+  hz.style.transform=`translateY(${(s.el*4).toFixed(0)}px) rotate(${s.roll}deg)`;
+  const rm=((Math.abs(s.roll)%90)+90)%90; hz.classList.toggle("lvl",Math.min(rm,90-rm)<1.5&&Math.abs(s.el)<2);
+}
+
+async function start(){
+  const msg=$("#msg"); msg.textContent="";
+  try{
+    for(const E of [window.DeviceOrientationEvent,window.DeviceMotionEvent])
+      if(E&&typeof E.requestPermission==="function"){const r=await E.requestPermission(); if(r!=="granted")msg.textContent="Motion access was denied, so only the camera will work."}
+  }catch(e){}
+  S.t0=Date.now();
+  window.addEventListener("deviceorientationabsolute",onOri);
+  window.addEventListener("deviceorientation",onOri);
+  window.addEventListener("devicemotion",onMotion);
+  startGeneric();
+  setInterval(sample,50); setInterval(render,100);
+  $("#vf").classList.add("on"); $("#startCard").hidden=true;
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:4096},height:{ideal:3072}}});
+    const v=$("#vid"); v.srcObject=st; await v.play();
+    if("ImageCapture" in window)S.ic=new ImageCapture(st.getVideoTracks()[0]);
+    $("#snap").disabled=false;
+  }catch(e){$("#nocam").style.display="flex"}
+}
+
+const toDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
+function toBlob(u){const p=u.split(","),bin=atob(p[1]),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:"image/jpeg"})}
+function frameBlob(){const v=$("#vid"),c=document.createElement("canvas");c.width=v.videoWidth;c.height=v.videoHeight;c.getContext("2d").drawImage(v,0,0);
+  return new Promise(r=>c.toBlob(r,"image/jpeg",.93))}
+
+function embed(url,meta){
+  let ex; try{ex=piexif.load(url)}catch(e){ex={}}
+  ex["0th"]=ex["0th"]||{}; ex.Exif=ex.Exif||{}; ex.GPS=ex.GPS||{}; ex["1st"]={}; ex.thumbnail=null;
+  ex["0th"][piexif.ImageIFD.Software]="sensor-photo prototype";
+  ex.Exif[piexif.ExifIFD.UserComment]="ASCII\0\0\0"+JSON.stringify(meta);
+  if(meta.heading.deg!=null){
+    ex.GPS[piexif.GPSIFD.GPSVersionID]=[2,3,0,0];
+    ex.GPS[piexif.GPSIFD.GPSImgDirectionRef]="M";
+    ex.GPS[piexif.GPSIFD.GPSImgDirection]=[Math.round(meta.heading.deg*100),100];
+  }
+  return piexif.insert(piexif.dump(ex),url);
+}
+
+async function snap(){
+  const btn=$("#snap"); btn.disabled=true;
+  const s=summarize()||{};
+  const c=S.caps, now=new Date();
+  const meta={app:"sensor-photo-proto",capturedAt:now.toISOString(),
+    sensors:{tilt:c.tilt,heading:c.heading,gravity:c.gravity,gyro:c.gyro,rawMagnetometer:c.mag},
+    heading:{deg:s.hd??null,ref:"magnetic",spreadDeg:s.spread??null,stable:s.spread!=null&&s.spread<=3,
+      note:s.hd==null?(c.heading?"camera pointing up or down, heading undefined":"no compass available"):"direction the rear camera faces"},
+    cameraPitchDeg:s.el??null,rollDeg:s.roll??null,gravityMs2:s.g??null,
+    magneticFieldUT:s.mg??null,fieldStrengthUT:s.mb??null,fieldPlausible:s.mb==null?null:(s.mb>=25&&s.mb<=65),
+    samples:s.n??0,screenAngle:(screen.orientation&&screen.orientation.angle)||0};
+  try{
+    let blob=null;
+    if(S.ic){try{blob=await S.ic.takePhoto()}catch(e){}}
+    if(!blob||blob.type!=="image/jpeg")blob=await frameBlob();
+    S.blob=toBlob(embed(await toDataURL(blob),meta));
+    $("#out").src=URL.createObjectURL(S.blob);
+    $("#size").textContent=`${(S.blob.size/1048576).toFixed(1)} MB JPEG`;
+    $("#json").textContent=JSON.stringify(meta,null,2);
+    $("#res").hidden=false; $("#res").scrollIntoView({behavior:"smooth"});
+    const f=new File([S.blob],"x.jpg",{type:"image/jpeg"});
+    $("#share").hidden=!(navigator.canShare&&navigator.canShare({files:[f]}));
+    S.meta=meta;
+  }catch(e){$("#msg").textContent="Could not save the photo: "+(e.message||e);$("#startCard").hidden=false;$("#start").hidden=true}
+  btn.disabled=false;
+}
+
+async function save(){
+  const name="sensor-"+new Date().toISOString().replace(/[:.]/g,"-").slice(0,19)+".jpg";
+  try{
+    const d=(typeof claude!=="undefined")?await claude.use("downloads"):null;
+    if(d){await d.save({filename:name,data:S.blob});return}
+  }catch(e){if(e&&e.code==="declined")return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(S.blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
+async function share(){
+  try{await navigator.share({files:[new File([S.blob],"sensor-photo.jpg",{type:"image/jpeg"})]})}catch(e){}
+}
+$("#start").onclick=start; $("#snap").onclick=snap; $("#save").onclick=save; $("#share").onclick=share;
+render();
+</script>
+</body>
+</html>
